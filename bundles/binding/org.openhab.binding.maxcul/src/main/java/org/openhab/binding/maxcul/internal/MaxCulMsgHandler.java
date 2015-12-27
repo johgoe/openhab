@@ -29,6 +29,9 @@ import org.openhab.binding.maxcul.internal.messages.AckMsg;
 import org.openhab.binding.maxcul.internal.messages.AddLinkPartnerMsg;
 import org.openhab.binding.maxcul.internal.messages.BaseMsg;
 import org.openhab.binding.maxcul.internal.messages.ConfigTemperaturesMsg;
+import org.openhab.binding.maxcul.internal.messages.ConfigWeekProfileMsg;
+import org.openhab.binding.maxcul.internal.messages.PushButtonMsg;
+import org.openhab.binding.maxcul.internal.messages.SetDisplayActualTempMsg;
 import org.openhab.binding.maxcul.internal.messages.MaxCulBindingMessageProcessor;
 import org.openhab.binding.maxcul.internal.messages.MaxCulMsgType;
 import org.openhab.binding.maxcul.internal.messages.PairPingMsg;
@@ -37,6 +40,7 @@ import org.openhab.binding.maxcul.internal.messages.ResetMsg;
 import org.openhab.binding.maxcul.internal.messages.SetDisplayActualTempMsg;
 import org.openhab.binding.maxcul.internal.messages.SetGroupIdMsg;
 import org.openhab.binding.maxcul.internal.messages.SetTemperatureMsg;
+import org.openhab.binding.maxcul.internal.messages.ShutterContactStateMsg;
 import org.openhab.binding.maxcul.internal.messages.ThermostatControlMode;
 import org.openhab.binding.maxcul.internal.messages.ThermostatStateMsg;
 import org.openhab.binding.maxcul.internal.messages.TimeInfoMsg;
@@ -317,18 +321,22 @@ public class MaxCulMsgHandler implements CULListener {
             case WALL_THERMOSTAT_STATE:
                 new WallThermostatStateMsg(data).printMessage();
                 break;
+		case PUSH_BUTTON_STATE:
+			new PushButtonMsg(data).printMessage();
+			break;
+		case SHUTTER_CONTACT_STATE:
+			new ShutterContactStateMsg(data).printMessage();
+			break;
             case ADD_LINK_PARTNER:
             case CONFIG_TEMPERATURES:
             case CONFIG_VALVE:
             case CONFIG_WEEK_PROFILE:
-            case PUSH_BUTTON_STATE:
             case REMOVE_GROUP_ID:
             case REMOVE_LINK_PARTNER:
             case RESET:
             case SET_COMFORT_TEMPERATURE:
             case SET_DISPLAY_ACTUAL_TEMP:
             case SET_ECO_TEMPERATURE:
-            case SHUTTER_CONTACT_STATE:
             case UNKNOWN:
             default:
                 BaseMsg baseMsg = new BaseMsg(data);
@@ -582,6 +590,29 @@ public class MaxCulMsgHandler implements CULListener {
                 temp, ThermostatControlMode.MANUAL);
         sendMessage(msg);
     }
+	
+	/**
+	 * Send week profile
+	 * 
+	 * @param devAddr
+	 *            Radio addr of device
+	 * @param msgSeq
+	 *            Message sequencer to associate with this message
+	 * @param weekProfile
+	 *            week profile value
+	 * @param secondHalf
+	 *            flag if the control points > 7 should be send
+	 */
+	public void sendWeekProfile(String devAddr, MessageSequencer msgSeq,
+			MaxCulWeekProfilePart weekProfilePart, boolean secondHalf) {
+		
+		ConfigWeekProfileMsg cfgWeekProfileMsg = new ConfigWeekProfileMsg(
+				getMessageCount(), (byte) 0, (byte) 0, this.srcAddr, devAddr,weekProfilePart,secondHalf
+				);
+		cfgWeekProfileMsg.setMessageSequencer(msgSeq);
+		sendMessage(cfgWeekProfileMsg);
+	}
+	
 
     /**
      * Send temperature configuration message

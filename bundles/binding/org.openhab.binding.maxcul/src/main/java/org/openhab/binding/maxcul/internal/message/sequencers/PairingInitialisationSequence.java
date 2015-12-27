@@ -18,6 +18,7 @@ import java.util.Iterator;
 import org.openhab.binding.maxcul.internal.MaxCulBindingConfig;
 import org.openhab.binding.maxcul.internal.MaxCulDevice;
 import org.openhab.binding.maxcul.internal.MaxCulMsgHandler;
+import org.openhab.binding.maxcul.internal.MaxCulWeekProfilePart;
 import org.openhab.binding.maxcul.internal.messages.AckMsg;
 import org.openhab.binding.maxcul.internal.messages.BaseMsg;
 import org.openhab.binding.maxcul.internal.messages.MaxCulMsgType;
@@ -44,6 +45,7 @@ public class PairingInitialisationSequence implements MessageSequencer {
         SENDING_ASSOCIATIONS_ACKED,
         SENDING_WEEK_PROFILE,
         RETX_WAKEUP_ACK,
+		SENDING_WEEK_PROFILE_ACKED,
         FINISHED;
     }
 
@@ -59,11 +61,18 @@ public class PairingInitialisationSequence implements MessageSequencer {
     private MaxCulBindingConfig config;
     private HashSet<MaxCulBindingConfig> associations;
     private Iterator<MaxCulBindingConfig> assocIter;
+	private Iterator<MaxCulWeekProfilePart> weekProfileIter;
     private boolean useFast = true;
 
     /* place to keep stuff when going through ReTx */
     private BaseMsg reTxMsg;
     private PairingInitialisationState reTxState;
+
+	
+	private MaxCulWeekProfilePart currentWeekProfilePart;
+	private boolean secondHalf;
+
+	
 
     public PairingInitialisationSequence(byte group_id, MaxCulMsgHandler messageHandler, MaxCulBindingConfig cfg,
             HashSet<MaxCulBindingConfig> associations) {
@@ -191,7 +200,7 @@ public class PairingInitialisationSequence implements MessageSequencer {
                             // TODO NOTE: if further states are added then ensure
                             // you go to the right state. I.e. when all associations
                             // are done
-                            state = PairingInitialisationState.FINISHED;
+						state = PairingInitialisationState.SENDING_WEEK_PROFILE;
                         }
                     } else {
                         logger.error("SENDING_ASSOCIATIONS was nacked. Ending sequence");
@@ -201,14 +210,102 @@ public class PairingInitialisationSequence implements MessageSequencer {
                     logger.error("Received " + msg.msgType + " when expecting ACK");
                 }
                 break;
+
             case SENDING_ASSOCIATIONS_ACKED:
-                state = PairingInitialisationState.FINISHED;
-                break;
+			if (msg.msgType == MaxCulMsgType.ACK) {
+				AckMsg ack = new AckMsg(msg.rawMsg);
+				if (!ack.getIsNack()) {					
+					if ((this.deviceType == MaxCulDevice.WALL_THERMOSTAT
+							|| this.deviceType == MaxCulDevice.RADIATOR_THERMOSTAT_PLUS) &&
+							!config.getWeekProfile().getWeekProfileParts().isEmpty()) {
+						weekProfileIter = config.getWeekProfile().getWeekProfileParts().iterator();
+						secondHalf=false;
+						if (weekProfileIter.hasNext()){		
+								currentWeekProfilePart= weekProfileIter.next();
+								messageHandler.sendWeekProfile(devAddr, this,
+										currentWeekProfilePart, secondHalf);
+								state = PairingInitialisationState.SENDING_WEEK_PROFILE;
+						} else {
+							logger.debug("No weekprofile configured");
+							state = PairingInitialisationState.FINISHED;
+						}						
+					} else {
+						logger.debug("No weekprofile configured");
+						state = PairingInitialisationState.FINISHED;
+					}
+				}
+				else {
+					logger.error("SENDING_ASSOCIATIONS_ACKED was nacked. Ending sequence");
+					state = PairingInitialisationState.FINISHED;
+					break;
+				}
+			} else {
+				logger.error("Received " + msg.msgType + " when expecting ACK");
+				break;
+			}
             case SENDING_WEEK_PROFILE:
-                // TODO implement this - but where to get a week profile from.
-                // Meaningless at the moment!
-                state = PairingInitialisationState.FINISHED;
+			if (msg.msgType == MaxCulMsgType.ACK) {
+				AckMsg ack = new AckMsg(msg.rawMsg);
+				if (!ack.getIsNack()) {								
+					//And then the remaining 6
+					if(!secondHalf && currentWeekProfilePart.getControlPoints().size() > 7){
+						secondHalf = true;
+						messageHandler.sendWeekProfile(devAddr, this,
+								currentWeekProfilePart, secondHalf);
+						/*
+						 * if it's the last week profile part message then wait for
+						 * last ACK
+						 */
+						if (weekProfileIter.hasNext()) {
+							state = PairingInitialisationState.SENDING_WEEK_PROFILE;
+						} else {
+							state = PairingInitialisationState.SENDING_WEEK_PROFILE_ACKED;
+						}
+						break;
+					}
+					//First 7 controlpoints 
+					secondHalf = false;
+					if (weekProfileIter.hasNext())
+					{
+						currentWeekProfilePart = weekProfileIter.next();
+						messageHandler.sendWeekProfile(devAddr, this,
+								currentWeekProfilePart, secondHalf);
+						/*
+						 * if it's the last week profile part message then wait for
+						 * last ACK
+						 */
+						if (weekProfileIter.hasNext()) {
+							state = PairingInitialisationState.SENDING_WEEK_PROFILE;
+						} else {
+							state = PairingInitialisationState.SENDING_WEEK_PROFILE_ACKED;
+						}
+					} else {
+						// TODO NOTE: if further states are added then ensure
+						// you go to the right state. I.e. when all week profile parts
+						// are done
+						state = PairingInitialisationState.FINISHED;
+					}
+				} else {
+					logger.error("SENDING_ASSOCIATIONS was nacked. Ending sequence");
+					state = PairingInitialisationState.FINISHED;
+				}
+			} else {
+				logger.error("Received " + msg.msgType + " when expecting ACK");
+			}
                 break;
+		case SENDING_WEEK_PROFILE_ACKED:
+			if (msg.msgType == MaxCulMsgType.ACK) {
+				AckMsg ack = new AckMsg(msg.rawMsg);
+				if (!ack.getIsNack()) {
+					state = PairingInitialisationState.FINISHED;
+				} else {
+					logger.error("SENDING_WEEK_PROFILE was nacked. Ending sequence");
+					state = PairingInitialisationState.FINISHED;
+				}
+			} else {
+				logger.error("Received " + msg.msgType + " when expecting ACK");
+			}
+			break;
             case FINISHED:
                 /* done, do nothing */
                 break;

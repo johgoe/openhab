@@ -21,6 +21,7 @@ import java.util.HashSet;
 import java.util.Properties;
 
 import org.openhab.binding.maxcul.internal.messages.ConfigTemperaturesMsg;
+import org.openhab.binding.maxcul.internal.messages.ConfigWeekProfileMsg;
 import org.openhab.core.binding.BindingConfig;
 import org.openhab.model.item.binding.BindingConfigParseException;
 import org.slf4j.Logger;
@@ -38,7 +39,9 @@ public class MaxCulBindingConfig implements BindingConfig {
     private String serialNumber = "";
     private String devAddr = "";
     private boolean paired = false;
-
+	
+	
+	private MaxCulWeekProfile weekProfile = ConfigWeekProfileMsg.DEFAULT_WEEK_PROFILE;
     private double comfortTemp = ConfigTemperaturesMsg.DEFAULT_COMFORT_TEMP;
     private double ecoTemp = ConfigTemperaturesMsg.DEFAULT_ECO_TEMP;
     private double maxTemp = ConfigTemperaturesMsg.DEFAULT_MAX_TEMP;
@@ -67,6 +70,10 @@ public class MaxCulBindingConfig implements BindingConfig {
         MaxCulBindingConfigParser.parseMaxCulBindingString(bindingConfig, this);
     }
 
+	public MaxCulWeekProfile getWeekProfile() {
+		return weekProfile;
+	}
+	
     public double getComfortTemp() {
         return comfortTemp;
     }
@@ -250,6 +257,10 @@ public class MaxCulBindingConfig implements BindingConfig {
     public void setComfortTemp(double comfortTemp) {
         this.comfortTemp = comfortTemp;
     }
+
+	public void setWeekProfile(MaxCulWeekProfile weekProfile) {
+		this.weekProfile = weekProfile;
+	}
 
     public void setSerialNumber(String serialNumber) {
         this.serialNumber = serialNumber;

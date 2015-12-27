@@ -12,6 +12,9 @@
  */
 package org.openhab.binding.maxcul.internal;
 
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
 import org.openhab.core.items.Item;
 import org.openhab.core.library.items.ContactItem;
 import org.openhab.core.library.items.NumberItem;
@@ -72,6 +75,8 @@ public class MaxCulBindingConfigParser {
                     logger.debug("Part " + idx + "/" + (configParts.length - 1) + " -> " + configParts[idx]);
                     if (configParts[idx].startsWith("configTemp")) {
                         parseConfigTemp(configParts[idx], cfg);
+					}if (configParts[idx].startsWith("weekProfile")) {
+						parseWeekProfile(configParts[idx], cfg);
                     } else if (configParts[idx].startsWith("associate")) {
                         parseAssociation(configParts[idx], cfg);
                     } else if (configParts[idx].startsWith("feature")) {
@@ -228,6 +233,60 @@ public class MaxCulBindingConfigParser {
                     "Temperature configuration should be of form 'configTemp=<comfortTemp>/<ecoTemp>/<maxTemp>/<minTemp>/<windowOpenTemperature>/<windowOpenDuration>/<measurementOffset>'");
         }
     }
+	
+	private static void parseWeekProfile(String configPart,
+			MaxCulBindingConfig cfg) throws BindingConfigParseException {
+		String[] configKeyValueSplit = configPart.split("=");
+		if (configKeyValueSplit.length == 2) {
+			cfg.setWeekProfile(parseWeekProfileString(configKeyValueSplit[1]));			
+		} else
+			throw new BindingConfigParseException(
+					"Temperature configuration should be of form 'configTemp=<comfortTemp>/<ecoTemp>/<maxTemp>/<minTemp>/<windowOpenTemperature>/<windowOpenDuration>/<measurementOffset>'");
+	}
+	
+	public static MaxCulWeekProfile parseWeekProfileString(String weekProfile) throws BindingConfigParseException{
+		MaxCulWeekProfile result = new MaxCulWeekProfile();
+		String[] args = weekProfile.split(";");
+		if(args.length % 2 == 1){
+			throw new BindingConfigParseException("Number of arguments must be even.");
+		}
+		for(int i =0; i < args.length; i +=2){
+			MaxCulWeekProfilePart weekProfilePart = new MaxCulWeekProfilePart();
+			MaxCulWeekdays day = MaxCulWeekdays.getWeekDayFromShortName(args[i]);
+			weekProfilePart.setDay(day);
+			String[] controlPoints = args[i+1].split(",");
+			if(controlPoints.length > 13*2){
+				throw new BindingConfigParseException("Not more than 13 control points are allowed!");
+			}
+			//Each day has 2 bytes * 13 controlpoints = 26 bytes = 52 hex characters
+			//we don't have to update the rest, because the active part is terminated by the time 0:00
+			for(int j = 0; j < 13*2; j += 2){	
+				MaxCulWeekProfileControlPoint controlPoint = new MaxCulWeekProfileControlPoint();		
+				if(j+1==controlPoints.length){
+					controlPoint.setHour(0);
+					controlPoint.setMin(0);
+					controlPoint.setTemperature(0.0f);
+					break;
+				} else {
+					
+					String timeRegex = "^(\\d{1,2})-(\\d{1,2})$";
+					Pattern pattern = Pattern.compile(timeRegex);
+					Matcher matcher = pattern.matcher(controlPoints[j+1]);
+					if (matcher.matches()) {
+						controlPoint.setHour(Integer.parseInt(matcher.group(1)));
+						controlPoint.setMin(Integer.parseInt(matcher.group(2)));
+					}
+				}
+				if(controlPoint.getHour()==null||controlPoint.getMin()==null|| controlPoint.getHour() >23 || controlPoint.getMin() > 59)
+					throw new IllegalArgumentException("Invalid time");
+				controlPoint.setTemperature(Float.parseFloat(controlPoints[j]));
+				weekProfilePart.addControlPoint(controlPoint);
+							
+			}
+			result.addWeekProfilePart(weekProfilePart);	
+		}
+		return result;
+	}
 
     private static void parseAssociation(String configPart, MaxCulBindingConfig cfg)
             throws BindingConfigParseException {
