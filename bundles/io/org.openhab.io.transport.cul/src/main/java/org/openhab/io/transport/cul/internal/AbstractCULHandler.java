@@ -150,7 +150,7 @@ public abstract class AbstractCULHandler<T extends CULConfig> implements CULHand
     protected List<CULListener> listeners = new ArrayList<CULListener>();
 
     protected BlockingQueue<String> sendQueue = new LinkedTransferQueue<String>();
-    protected int credit10ms = 0;
+    protected int credit10ms = 900;
 
     protected AbstractCULHandler(T config) {
         this.config = config;
